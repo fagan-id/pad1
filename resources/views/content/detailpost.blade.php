@@ -772,7 +772,7 @@
                         </p>
                     </div>
                     <p class="mt-2 text-xs text-cyan sm:text-sm">
-                        Posted: ${getDateDifference(vacancy.date_open)}
+                        Posted: ${getDateDifference(vacancy.created_at)}
                     </p>
                 </div>
             </div>
