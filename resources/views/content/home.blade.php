@@ -2,11 +2,12 @@
 
 @section('content')
     {{-- Carousel Start --}}
-    <section id="default-carousel" class="relative mt-20 w-full" data-carousel="slide">
-        <div class="relative h-screen overflow-hidden">
+    <section id="carousel-wrapper" class="relative mt-20 h-screen w-full overflow-hidden" data-carousel="slide">
+        <div class="flex h-full w-full transition-transform duration-700 ease-in-out" id="news-carousel">
 
             {{-- Slide 1 --}}
             <div class="absolute inset-0 transform transition-transform duration-700 ease-in-out" data-carousel-item="active">
+            {{-- <div class="absolute inset-0 transform transition-transform duration-700 ease-in-out" data-carousel-item="active">
                 <div
                     class="relative flex h-full w-full items-center justify-start bg-gray-700 px-4 py-20 text-start shadow md:py-24 lg:py-56">
 
@@ -22,10 +23,10 @@
                         </p>
                     </div>
                 </div>
-            </div>
+            </div> --}}
 
             {{-- Slide 2 --}}
-            <div class="absolute inset-0 translate-x-full transform transition-transform duration-700 ease-in-out"
+            {{-- <div class="absolute inset-0 translate-x-full transform transition-transform duration-700 ease-in-out"
                 data-carousel-item>
                 <div
                     class="relative flex h-full w-full items-center justify-start bg-gray-700 px-4 py-20 text-start shadow md:py-24 lg:py-56">
@@ -44,10 +45,10 @@
                         </p>
                     </div>
                 </div>
-            </div>
+            </div> --}}
 
             {{-- Slide 3 --}}
-            <div class="absolute inset-0 translate-x-full transform transition-transform duration-700 ease-in-out"
+            {{-- <div class="absolute inset-0 translate-x-full transform transition-transform duration-700 ease-in-out"
                 data-carousel-item>
                 <div
                     class="relative flex h-full w-full items-center justify-start bg-gray-700 px-4 py-20 text-start shadow md:py-24 lg:py-56">
@@ -66,28 +67,26 @@
                         </p>
                     </div>
                 </div>
-            </div>
+            </div> --}}
         </div>
 
         {{-- Carousel Indicators --}}
-        <div class="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 space-x-3">
-            <button type="button" class="h-3 w-3 rounded-full" aria-current="true" aria-label="Slide 1"
+        <div class="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 space-x-3" id="carousel-indicators">
+            {{-- <button type="button" class="h-3 w-3 rounded-full" aria-current="true" aria-label="Slide 1"
                 data-carousel-slide-to="0"></button>
             <button type="button" class="h-3 w-3 rounded-full" aria-current="false" aria-label="Slide 2"
                 data-carousel-slide-to="1"></button>
             <button type="button" class="h-3 w-3 rounded-full" aria-current="false" aria-label="Slide 3"
-                data-carousel-slide-to="2"></button>
+                data-carousel-slide-to="2"></button> --}}
         </div>
 
         {{-- Previous Button --}}
-        <button type="button"
-            class="group absolute left-0 top-0 z-30 flex h-full cursor-pointer items-center justify-center px-4 focus:outline-none"
-            data-carousel-prev>
+        <button id="prevBtn" type="button" data-carousel-prev
+            class="group absolute left-0 top-0 z-30 flex h-full items-center px-4">
             <span
                 class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/30 group-hover:bg-white/50">
-                <svg class="h-4 w-4 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-                    viewBox="0 0 6 10">
-                    <path stroke="currentColor" stroke-linecap="round" stroke -linejoin="round" stroke-width="2"
+                <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 6 10">
+                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M5 1 1 5l4 4" />
                 </svg>
                 <span class="sr-only">Previous</span>
@@ -95,13 +94,11 @@
         </button>
 
         {{-- Next Button --}}
-        <button type="button"
-            class="group absolute right-0 top-0 z-30 flex h-full cursor-pointer items-center justify-center px-4 focus:outline-none"
-            data-carousel-next>
+        <button id="nextBtn" type="button" data-carousel-next
+            class="group absolute right-0 top-0 z-30 flex h-full items-center px-4">
             <span
                 class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/30 group-hover:bg-white/50">
-                <svg class="h-4 w-4 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-                    viewBox="0 0 6 10">
+                <svg class="h-4 w-4 text-white" fill="none" viewBox="0 0 6 10">
                     <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M1 9l4-4-4-4" />
                 </svg>
@@ -221,10 +218,164 @@
 
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
+
+    {{-- Banner News API --}}
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const carousel = document.getElementById('news-carousel');
+            const indicatorsContainer = document.getElementById('carousel-indicators');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            let currentIndex = 0;
+            let totalItems = 0;
+            let autoPlayInterval = null;
+
+            // --- Placeholder Data ---
+            const placeholderNews = [{
+                banner_image: '/assets/jumbotron.png',
+                heading: 'Strategi Alumni Meraih Karier di Perusahaan Terbaik',
+                description: 'Memasuki dunia kerja setelah lulus merupakan tantangan tersendiri bagi banyak alumni...'
+            }, {
+                banner_image: '/assets/jumbotron2.png',
+                heading: 'Adaptasi dan Skill Baru: Tantangan Dunia Kerja di Era Digital',
+                description: 'Era digital membawa perubahan besar dalam dunia kerja. Kemajuan teknologi mengharuskan para profesional untuk terus beradaptasi dengan berbagai skill baru yang dibutuhkan oleh industri.'
+            }, {
+                banner_image: '/assets/jumbotron3.png',
+                heading: 'Tips & Trik Karir: Panduan Memasuki Dunia Kerja bagi Fresh Graduate',
+                description: 'Memasuki dunia kerja sebagai fresh graduate bisa menjadi tantangan tersendiri. Selain persaingan yang ketat, lulusan baru juga perlu memahami etika profesional...'
+            }];
+
+            // Function to set up the carousel with a given list of items
+            function initializeCarousel(items) {
+                totalItems = items.length;
+
+                if (totalItems === 0) {
+                    carousel.innerHTML = '<div class="text-center text-white p-10">No news available.</div>';
+                    prevBtn.style.display = 'none';
+                    nextBtn.style.display = 'none';
+                    return;
+                }
+
+                // Clear existing slides and indicators
+                carousel.innerHTML = '';
+                indicatorsContainer.innerHTML = '';
+
+                // Inject slides and indicators
+                items.forEach((item, index) => {
+                    const slide = document.createElement('div');
+                    slide.className = 'h-full w-full relative flex-shrink-0'; // Added flex-shrink-0
+                    slide.style.width = '100%'; // Ensure slide takes full width
+                    slide.innerHTML = `
+                        <div class="relative flex h-full w-full items-center justify-start bg-gray-700 px-4 py-20 text-start shadow md:py-24 lg:py-56">
+                            <img src="${item.banner_image}" alt="Banner Image" class="absolute inset-0 z-0 h-full w-full object-cover opacity-60" />
+                            <div class="relative z-10 mx-auto w-full max-w-screen-xl text-white">
+
+                                <h1 class="mb-4 text-3xl leading-normal sm:text-4xl md:text-5xl lg:text-6xl line-clamp-3 break-words">
+                                    ${item.heading ?? ''}
+                                </h1>
+
+                                <p class="mb-8 text-base font-normal text-gray-300 sm:text-lg lg:text-xl line-clamp-3 break-words">
+                                    ${item.description ?? ''}
+                                </p>
+
+                            </div>
+                        </div>
+                    `;
+                    carousel.appendChild(slide);
+
+                    const indicator = document.createElement('button');
+                    indicator.className =
+                    `h-3 w-3 rounded-full ${index === 0 ? 'bg-white' : 'bg-white/30'}`;
+                    indicator.dataset.slideTo = index;
+                    indicator.addEventListener('click', () => goToSlide(index));
+                    indicatorsContainer.appendChild(indicator);
+                });
+
+                // Make the carousel a flex container
+                carousel.style.display = 'flex';
+                carousel.style.transition = 'transform 0.7s ease-in-out';
+
+                updateCarouselPosition();
+                startAutoPlay();
+            }
+
+            function updateCarouselPosition() {
+                if (totalItems === 0) return;
+                const slideWidth = carousel.clientWidth;
+                carousel.style.transform = `translateX(-${currentIndex * slideWidth}px)`;
+
+                [...indicatorsContainer.children].forEach((el, i) => {
+                    el.className =
+                    `h-3 w-3 rounded-full ${i === currentIndex ? 'bg-white' : 'bg-white/30'}`;
+                });
+            }
+
+            function goToSlide(index) {
+                currentIndex = index;
+                updateCarouselPosition();
+                resetAutoPlay();
+            }
+
+            function nextSlide() {
+                currentIndex = (currentIndex + 1) % totalItems;
+                updateCarouselPosition();
+            }
+
+            function prevSlide() {
+                currentIndex = (currentIndex - 1 + totalItems) % totalItems;
+                updateCarouselPosition();
+            }
+
+            function startAutoPlay() {
+                if (autoPlayInterval) clearInterval(autoPlayInterval);
+                autoPlayInterval = setInterval(nextSlide, 5000);
+            }
+
+            function resetAutoPlay() {
+                clearInterval(autoPlayInterval);
+                startAutoPlay();
+            }
+
+            // --- Event Listeners ---
+            prevBtn.addEventListener('click', () => {
+                prevSlide();
+                resetAutoPlay();
+            });
+
+            nextBtn.addEventListener('click', () => {
+                nextSlide();
+                resetAutoPlay();
+            });
+
+            window.addEventListener('resize', updateCarouselPosition);
+
+            // --- Fetch Data ---
+            axios.get('/api/news')
+                .then(response => {
+                    let newsList = response.data.data.reverse().slice(0, 3);
+                    const itemsNeeded = 3 - newsList.length;
+
+                    if (itemsNeeded > 0) {
+                        // Add the required number of placeholders
+                        const placeholdersToAdd = placeholderNews.slice(0, itemsNeeded);
+                        newsList = newsList.concat(placeholdersToAdd);
+                    }
+
+                    initializeCarousel(newsList);
+                })
+                .catch(error => {
+                    console.error("Error fetching news, loading placeholder content.", error);
+                    // In case of an API error, load the 3 placeholders
+                    initializeCarousel(placeholderNews);
+                });
+        });
+    </script>
+
     {{-- Posts API --}}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            axios.get('http://127.0.0.1:8000/api/posts', {
+            axios.get('/api/posts', {
                     withCredentials: true
                 })
                 .then(response => {
@@ -234,7 +385,8 @@
                     const posts = allPosts.slice(0, 2); // Ambil hanya 2 pertama
 
                     if (posts.length === 0) {
-                        postsContainer.innerHTML = '<p>No posts available</p>';
+                        postsContainer.innerHTML =
+                            '<p class="text-white">Looks like there are no posts at the moment. Please check back later!</p>';
                         return;
                     }
 
@@ -296,13 +448,14 @@
             const companiesContainer = document.getElementById('companies-container');
 
             // Make API request to get approved companies
-            axios.get('http://127.0.0.1:8000/api/home/top-company')
+            axios.get('/api/home/top-company')
                 .then(response => {
                     // Get companies array from the data property of the response
                     const topCompanies = response.data.data.data; // Access the nested data array
 
                     if (!topCompanies || topCompanies.length === 0) {
-                        companiesContainer.innerHTML = '<p class="text-white">No companies available</p>';
+                        companiesContainer.innerHTML =
+                            '<p class="text-white">Company information is currently unavailable. Please check back later!</p>';
                         return;
                     }
 

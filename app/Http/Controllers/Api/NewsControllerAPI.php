@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
-use App\Http\Resources\NewsResource;
 use App\Models\News;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\NewsResource;
+use Illuminate\Support\Facades\Storage;
 
 class NewsControllerAPI extends Controller
 {
     public function index()
     {
-        return NewsResource::collection(News::paginate(3));
+        $latestNews = News::latest()->take(3)->get(); // urutkan dari terbaru dan ambil 3 data
+        return NewsResource::collection($latestNews);
     }
+
 
     public function show($id)
     {
@@ -28,15 +31,18 @@ class NewsControllerAPI extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'heading' => 'required|string|max:255',
-            'description' => 'required|string',
-            'cover_page' => 'required|string'
+            'heading' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'banner_image' => 'required|image|mimes:jpg,jpeg,png|max:2048'
         ]);
+
+        // Simpan file ke storage
+        $path = $request->file('banner_image')->store('news-images', 'public');
 
         $news = News::create([
             'heading' => $request->heading,
             'description' => $request->description,
-            'cover_page' => $request->cover_page
+            'banner_image' => $path, // simpan path relatifnya
         ]);
 
         return response()->json([
@@ -48,16 +54,29 @@ class NewsControllerAPI extends Controller
     public function update(Request $request, $id)
     {
         $request->validate([
-            'heading' => 'required|string|max:255',
-            'description' => 'required|string',
-            'cover_page' => 'required|string'
+            'heading' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'banner_image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
         $news = News::findOrFail($id);
+
+        // Kalau ada gambar baru di-upload, simpan file baru & hapus yang lama
+        if ($request->hasFile('banner_image')) {
+            // hapus file lama jika ada
+            if ($news->banner_image && Storage::disk('public')->exists($news->banner_image)) {
+                Storage::disk('public')->delete($news->banner_image);
+            }
+
+            $path = $request->file('banner_image')->store('news-images', 'public');
+        } else {
+            $path = $news->banner_image; // tetap pakai gambar lama
+        }
+
         $news->update([
             'heading' => $request->heading,
             'description' => $request->description,
-            'cover_page' => $request->cover_page
+            'banner_image' => $path,
         ]);
 
         return response()->json([
@@ -69,6 +88,10 @@ class NewsControllerAPI extends Controller
     public function destroy($id)
     {
         $news = News::findOrFail($id);
+
+        if ($news->banner_image && Storage::exists($news->banner_image)) {
+            Storage::delete($news->banner_image);
+        }
 
         $news->delete();
 

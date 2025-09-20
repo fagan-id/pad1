@@ -4,12 +4,23 @@
     <section>
         <div class="mt-5 pt-4 sm:ml-64">
             <div class="mx-2 mt-14">
+                @if (Session::has('approved'))
+                    <div class="mx-auto mb-4 w-3/4 transform rounded-lg bg-lightgreen p-4 text-center text-sm text-green-800 opacity-100 transition-opacity duration-500 sm:w-1/2"
+                        role="alert">
+                        {!! Session::get('approved') !!}
+                    </div>
+                @elseif (Session::has('rejected'))
+                    <div class="mx-auto mb-4 w-3/4 transform rounded-lg bg-red-300 p-4 text-center text-sm text-red-800 opacity-100 transition-opacity duration-500 sm:w-1/2"
+                        role="alert">
+                        {!! Session::get('rejected') !!}
+                    </div>
+                @endif
                 <h2 class="flex justify-center text-4xl">Alumni</h2>
                 <div class="relative sm:mx-10">
                     <div class="top-0 z-20 flex justify-between bg-white pb-4">
 
                         {{-- Add Alumni Button --}}
-                        <button data-modal-target="crud-modal" data-modal-toggle="crud-modal"
+                        {{-- <button data-modal-target="crud-modal" data-modal-toggle="crud-modal"
                             class="group rounded-xl bg-cyan p-2 shadow-md hover:bg-cyan-400 hover:text-cyan">
                             <svg class="h-6 w-6 text-white group-hover:text-cyan" aria-hidden="true"
                                 xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none"
@@ -17,15 +28,13 @@
                                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M5 12h14m-7 7V5" />
                             </svg>
-                        </button>
+                        </button> --}}
 
                         {{-- Main modal --}}
-                        <div id="crud-modal" tabindex="-1" aria-hidden="true"
+                        {{-- <div id="crud-modal" tabindex="-1" aria-hidden="true"
                             class="fixed left-0 right-0 top-0 z-50 hidden h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden md:inset-0">
                             <div class="relative max-h-full w-full max-w-5xl p-4">
-                                {{-- Modal content --}}
                                 <div class="relative rounded-lg border-4 border-cyan-100 bg-white p-2 shadow">
-                                    {{-- Modal header --}}
                                     <div
                                         class="flex items-center justify-between rounded-t border-b-4 border-cyan-100 text-center md:p-5">
                                         <h3 class="text-2xl text-cyan sm:text-start">
@@ -42,7 +51,6 @@
                                         </button>
                                     </div>
 
-                                    {{-- Modal body --}}
                                     <form class="scrollbar-modal max-h-96 overflow-y-auto p-4 md:p-5" method="POST"
                                         action="{{ route('admin.store') }}">
                                         @csrf
@@ -56,7 +64,7 @@
                                                     placeholder="Type the alumni’s name" required="">
                                             </div>
                                             <div class="col-span-2">
-                                                <label for="nim" class="mb-2 block text-sm text-cyan sm:text-2xl">NIM
+                                                <label for="nim" class="mb-2 block text-sm text-cyan sm:text-2xl">NIU
                                                     <span
                                                         class="relative top-1 -ms-2 align-baseline text-4xl leading-none text-red-500">*</span></label>
                                                 <input type="text" name="nim" id="nim"
@@ -82,7 +90,7 @@
                                     </form>
                                 </div>
                             </div>
-                        </div>
+                        </div> --}}
                     </div>
 
                     <div class="">
@@ -96,10 +104,16 @@
                                         <span>NAME</span>
                                     </th>
                                     <th scope="col" class="hidden-mobile px-6 py-3 font-normal text-black sm:text-base">
+                                        <span>NIM</span>
+                                    </th>
+                                    <th scope="col" class="hidden-mobile px-6 py-3 font-normal text-black sm:text-base">
                                         <span>NIU</span>
                                     </th>
                                     <th scope="col" class="hidden-mobile px-6 py-3 font-normal text-black sm:text-base">
                                         <span>EMAIL</span>
+                                    </th>
+                                    <th scope="col" class="px-6 py-3 text-sm font-normal text-black sm:text-base">
+                                        <span>ANGKATAN</span>
                                     </th>
                                     <th scope="col" class="px-6 py-3 text-sm font-normal text-black sm:text-base">
                                         <span>ACTION</span>
@@ -116,11 +130,17 @@
                                         <td class="px-6 py-4 text-sm text-black sm:text-base">
                                             {{ $a->userDetails->name ?? 'N/A' }}
                                         </td>
+                                        <td class="px-6 py-4 text-sm text-black sm:text-base">
+                                            {{ $a->userDetails->nim ?? 'N/A' }}
+                                        </td>
                                         <td class="hidden-mobile px-6 py-4 text-black">
                                             {{ $a->userDetails->nim_part ?? 'N/A' }}
                                         </td>
                                         <td class="hidden-mobile px-6 py-4 text-black">
                                             {{ $a->email }}
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-black sm:text-base">
+                                            {{ $a->userDetails->entry_year }}
                                         </td>
                                         <td class="px-6 py-4">
                                             <a href="{{ route('admin.detail-alumni', ['id' => $a->userDetails->id_userDetails ?? '']) }}"

@@ -13,6 +13,11 @@
     <link href="https://fonts.cdnfonts.com/css/gilgan" rel="stylesheet" />
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('css/style.css') }}" />
+
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('assets/favicon_io/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('assets/favicon_io/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('assets/favicon_io/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ asset('assets/favicon_io/site.webmanifest') }}">
 </head>
 
 <body>
@@ -140,6 +145,10 @@
                 Software Engineering Technology program at Universitas Gadjah Mada. Connect with the community and
                 discover various career paths.
             </p>
+            <div class="mb-6 flex justify-center space-x-6 text-gray-500">
+                <a href="{{ route('termsandcondition') }}" class="hover:underline">Terms of Service</a>
+                <a href="{{ route('privacypolicy') }}" class="hover:underline">Privacy & Policy</a>
+            </div>
             <span class="text-sm text-gray-500 sm:text-center">
                 © 2024.
                 <a href="#" class="hover:underline">

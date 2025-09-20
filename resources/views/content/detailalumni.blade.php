@@ -145,7 +145,7 @@
             const alumniId = window.location.pathname.split('/').pop();
 
             try {
-                const response = await axios.get(`http://127.0.0.1:8000/api/users/${alumniId}/experiences`, {
+                const response = await axios.get(`/api/users/${alumniId}/experiences`, {
                     withCredentials: true
                 });
 
@@ -156,29 +156,30 @@
                 const container = document.getElementById('detail-container');
 
                 const jobHTML = jobs.map(job => {
-                    const descriptions = Array.isArray(job.job_description) ?
+                    const descriptions = Array.isArray(job.job_description) && job.job_description
+                        .length > 0 ?
                         job.job_description.map(desc => `<li>${desc}</li>`).join('') :
-                        '';
+                        '<li>No job descriptions available</li>';
 
                     const alumniList = Array.isArray(job.related_alumni) && job.related_alumni.length >
                         0 ?
                         `
-                            <div class="grid justify-items-center gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 lg:gap-2">
+                            <div class="grid justify-items-center gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 lg:gap-1">
                                 ${job.related_alumni.map(alumni => `
-                                <a class="alumni-card w-full max-w-sm cursor-pointer rounded-lg border border-gray-200 bg-lightblue shadow-md transition-shadow duration-300 hover:shadow-lg"
-                                href="/alumni/${alumni.id_userDetails}">
-                                    <div class="flex flex-col items-center p-4 text-center">
-                                        <div class="mb-3 flex w-full justify-end px-2 text-gray-400">
-                                            <span class="text-sm">${alumni.graduate_year}</span>
-                                        </div>
-                                        <img class="mb-3 h-20 w-20 rounded-full object-cover shadow-lg"
-                                            src="/storage/profile/${alumni.profile_photo}" alt="${alumni.name}" />
-                                        <h2 class="mb-1 text-xl text-cyan">${alumni.name}</h2>
-                                        <h3 class="text-sm text-cyan">${alumni.current_job}</h3>
-                                        <h4 class="text-xs text-gray-500">${alumni.current_company}</h4>
-                                    </div>
-                                </a>
-                            `).join('')}
+                                            <a class="alumni-card w-full max-w-sm cursor-pointer rounded-lg border border-gray-200 bg-lightblue shadow-md transition-shadow duration-300 hover:shadow-lg"
+                                            href="/alumni/detail/${alumni.id_userDetails}">
+                                                <div class="flex flex-col items-center p-4 text-center">
+                                                    <div class="mb-3 flex w-full justify-end px-2 text-gray-400">
+                                                        <span class="text-sm">${alumni.graduate_year === '-' ? 'Graduated' : alumni.graduate_year}</span>
+                                                    </div>
+                                                    <img class="mb-3 h-20 w-20 rounded-full object-cover shadow-lg"
+                                                        src="/storage/profile/${alumni.profile_photo}" alt="${alumni.name}" />
+                                                    <h2 class="mb-1 text-lg text-cyan">${alumni.name}</h2>
+                                                    <h3 class="text-sm text-cyan">${alumni.current_job ?? 'Job not specified'}</h3>
+                                                    <h4 class="text-xs text-gray-500">${alumni.current_company ?? 'Company not specified'}</h4>
+                                                </div>
+                                            </a>
+                                        `).join('')}
                             </div>
                         ` : `
                             <div class="py-6 text-center">
@@ -210,14 +211,14 @@
                                 </div>
                                 <div class="scrollbar-modal max-h-96 space-y-4 overflow-y-auto">
                                     <h4 class="mt-4 text-lg text-white">Alumni with the same experience:</h4>
-                                    ${alumniList}
+                                    ${alumniList ?? 'No alumni found with this job experience.'}
                                 </div>
                             </div>
 
-                            <h3 class="text-base text-cyan sm:text-lg">${job.company_name}</h3>
+                            <h3 class="text-base text-cyan sm:text-lg">${job.company_name ?? 'Company not specified'}</h3>
                             <p class="text-xs text-gray-400 sm:text-sm">${job.date_start} - ${job.date_end}</p>
                             <ol class="ms-4 list-outside list-disc text-sm sm:text-base">
-                                ${descriptions}
+                                ${descriptions ?? 'No job descriptions available'}
                             </ol>
                         </li>
                     `;
@@ -230,7 +231,7 @@
                         <div class="mt-4">
                             <h2 class="text-xl text-cyan sm:text-2xl">${user.name}</h2>
                             <h3 class="text-md text-cyan sm:text-lg">
-                                ${user.current_job}, ${user.current_company}
+                                ${user.current_job ?? 'Job not specified'}, ${user.current_company ?? 'Company not specified'}
                             </h3>
                         </div>
                     </div>
@@ -238,14 +239,14 @@
                     <div class="mt-8 space-y-4">
                         <h4 class="text-lg text-cyan sm:text-xl">About</h4>
                         <p class="sm:text-md text-sm text-cyan sm:text-justify">
-                            ${user.user_description || '-'}
+                            ${user.user_description ?? 'No user description'}
                         </p>
                     </div>
 
                     <div class="flex flex-col space-y-4 pt-5">
                         <h4 class="text-lg text-cyan sm:text-xl">Experience</h4>
                         <ol class="relative ms-4 border-s border-gray-900">
-                            ${jobHTML}
+                            ${jobHTML ?? 'Not available'}
                         </ol>
                     </div>
                 `;

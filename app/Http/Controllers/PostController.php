@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Carbon\Carbon;
+use App\Models\Job;
 use App\Models\Company;
 use App\Models\Vacancy;
 use Illuminate\Http\Request;
@@ -69,17 +70,19 @@ class PostController extends Controller
         $userDetail = Auth::user()->userDetails;
         $jobTracking = optional($userDetail)->jobTrackings; // singular
 
-        $job = optional($jobTracking)->job; // job adalah object tunggal
+        if ($userDetail) {
+            $jobTrackings = $userDetail->jobTrackings()->with('job.company')->get();
 
-        // buat collection dari satu company supaya aman di blade
-        $companies = collect();
-
-        if ($job && $job->company) {
-            $companies = collect([$job->company]);
+            $companies = $jobTrackings
+                ->pluck('job.company')
+                ->filter()
+                ->unique('id_company')
+                ->values();
         }
 
+        $allJob = Job::get('job_name');
         // Mengembalikan View Content.Posts dengan Compact 'Vacancys, Companies'
-        return view('content.posts', compact('vacancys', 'companies'));
+        return view('content.posts', compact('vacancys', 'companies','allJob'));
     }
 
     /**
@@ -209,7 +212,7 @@ class PostController extends Controller
     public function apply(Request $request, string $id)
     {
         $request->validate([
-            'cv' => 'required|file|mimes:pdf,doc,docx'
+            'cv' => 'required|file|mimes:pdf,doc,docx|max:200'
         ]);
 
         $vacancy = Vacancy::findorFail($id);
@@ -227,7 +230,7 @@ class PostController extends Controller
             'status' => 'pending'
         ]);
 
-        return redirect()->route('posts.detail', $id)->with('success', 'Berhasil mengirim lamaran');
+        return redirect()->route('posts.detail', $id)->with('success', 'CV uploaded! Your application is now in review.');
     }
 
     public function deleteApply(string $id)
@@ -246,7 +249,7 @@ class PostController extends Controller
 
         $post->delete();
 
-        return redirect()->back()->with('success', 'Lamaran berhasil dihapus.');
+        return redirect()->back()->with('success', 'CV successfully deleted!');
     }
 
 }

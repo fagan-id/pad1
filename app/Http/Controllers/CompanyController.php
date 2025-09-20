@@ -20,7 +20,7 @@ class CompanyController extends Controller
      */
     public function index(Request $request)
     {
-        $company = Company::where('status','!=','pending')->paginate(50);
+        $company = Company::where('status', '!=', 'pending')->paginate(50);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -52,22 +52,14 @@ class CompanyController extends Controller
             'company_phone' => ['/^(?:\+62|62|0)8[1-9][0-9]{6,11}$/', 'max:255'],
             'company_address' => 'nullable|string|max:255',
             'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'company_gallery' => 'nullable|array|max:5',
+            'company_gallery.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096', // Validate each gallery image
         ]);
 
         Notification::create([
             'id_users' => Auth::user()->id_users, // ID of the user being notified
             'type' => 'pending_approval',
             'message' => 'Penambahan Data Companies Sedang di Verifikasi oleh Admin. Mohon tunggu konfirmasi lebih lanjut.',
-        ]);
-
-        $company = Company::create([
-            'company_name' => $request->company_name,
-            'company_field' => $request->company_field,
-            'company_description' => $request->company_description,
-            'company_phone' => $request->company_phone,
-            'company_address' => $request->company_address,
-            'company_picture' => $request->company_picture ?? 'https://picsum.photos/id/870/200/300?grayscale&blur=2',
-            'creator' => Auth::user()->id_users
         ]);
 
         if ($request->hasFile('company_picture')) {
@@ -77,9 +69,29 @@ class CompanyController extends Controller
             $extension = $request->file('company_picture')->getClientOriginalExtension();
             $filenameSimpan = $filename . '_' . time() . '.' . $extension;
             $file->storeAs('public/company', $filenameSimpan);
-            $company->company_picture = $filenameSimpan;
-            $company->save();
+            $companyPicture = $filenameSimpan;
         }
+
+        // Upload company_gallery (if any)
+        $galleryPaths = [];
+        if ($request->hasFile('company_gallery')) {
+            foreach ($request->file('company_gallery') as $galleryFile) {
+                $filename = time() . '_' . Str::slug($galleryFile->getClientOriginalName()) . '.' . $galleryFile->getClientOriginalExtension();
+                $galleryFile->storeAs('public/company/gallery', $filename);
+                $galleryPaths[] = $filename;
+            }
+        }
+
+        $company = Company::create([
+            'company_name' => $request->company_name,
+            'company_field' => $request->company_field,
+            'company_description' => $request->company_description,
+            'company_phone' => $request->company_phone,
+            'company_address' => $request->company_address,
+            'company_picture' => $companyPicture ?? null,
+            'company_gallery' => $galleryPaths, // ✅ now it's always passed
+            'creator' => Auth::user()->id_users,
+        ]);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -95,9 +107,11 @@ class CompanyController extends Controller
         $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255|unique:company,company_name',
             'company_field' => 'required|string|max:255',
-            'company_address' => 'nullable|string|max:255',
-            'company_description' => 'required|string',
-            'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'company_description' => 'required|string|max:255',
+            'company_address' => 'string|max:255',
+            'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'company_gallery' => 'nullable|array|max:5',
+            'company_gallery.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
         ]);
 
         if ($validator->fails()) {
@@ -111,14 +125,23 @@ class CompanyController extends Controller
 
             if ($request->hasFile('company_picture')) {
                 $file = $request->file('company_picture');
-                // Ensure a unique filename
                 $filenameSimpan = time() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
                 $file->storeAs('public/company', $filenameSimpan);
                 $companyData['company_picture'] = $filenameSimpan;
             } else {
-                 // If you have a default image, set it here. Otherwise, null.
-                $companyData['company_picture'] = 'default_company.png'; // Example default
+                $companyData['company_picture'] = 'default_company.png';
             }
+
+            // Upload company_gallery (if any)
+            $galleryPaths = [];
+            if ($request->hasFile('company_gallery')) {
+                foreach ($request->file('company_gallery') as $galleryFile) {
+                    $filename = time() . '_' . Str::slug($galleryFile->getClientOriginalName()) . '.' . $galleryFile->getClientOriginalExtension();
+                    $galleryFile->storeAs('public/company/gallery', $filename);
+                    $galleryPaths[] = $filename;
+                }
+            }
+            $companyData['company_gallery'] = $galleryPaths;
             $company = Company::create($companyData);
 
             return response()->json([
@@ -140,7 +163,7 @@ class CompanyController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(String $id)
+    public function show(string $id)
     {
         $company = Company::findOrFail($id);
 
@@ -158,8 +181,8 @@ class CompanyController extends Controller
                 DB::raw('COALESCE(YEAR(job_tracking.date_start), "Now") as date_start'),
                 DB::raw("COALESCE(user_details.profile_photo, 'default_profile.png') as profile_photo"),
             )
-            ->where('company.id_company', '=', $id) // filter by company ID
-            ->orderBy('user_details.name', 'asc')   // Optional: order workers by name
+            ->where('company.id_company', '=', $id)
+            ->orderBy('user_details.name', 'asc')
             ->paginate(10);
 
 
@@ -186,6 +209,10 @@ class CompanyController extends Controller
             'company_phone' => ['/^(?:\+62|62|0)8[1-9][0-9]{6,11}$/', 'max:255'],
             'company_address' => 'nullable|string|max:255',
             'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'company_gallery.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            'company_gallery' => 'nullable|array|max:10',
+            'deleted_images' => 'nullable|array', // To handle deletion of existing images
+            'deleted_images.*' => 'nullable|string' // Each item is a filename string
         ]);
 
         Notification::create([
@@ -195,15 +222,6 @@ class CompanyController extends Controller
         ]);
 
         $company = Company::findOrFail($id);
-        $company->update([
-            'company_name' => $request->company_name,
-            'company_field' => $request->company_field,
-            'company_description' => $request->company_description,
-            'company_phone' => $request->company_phone,
-            'company_address' => $request->company_address,
-            'company_picture' => $request->company_picture ?? 'https://picsum.photos/id/870/200/300?grayscale&blur=2',
-            'creator' => Auth::user()->id_users
-        ]);
 
         if ($request->hasFile('company_picture')) {
             // Delete old image if it exists
@@ -216,6 +234,38 @@ class CompanyController extends Controller
             $image->storeAs('public/company', $imageName);
             $company->company_picture = $imageName;
         }
+
+        // --- GALLERY UPDATE LOGIC ---
+        $currentGallery = $company->company_gallery ?? [];
+
+        // 1. Delete images marked for deletion
+        if ($request->has('deleted_images')) {
+            $imagesToDelete = $request->input('deleted_images');
+            foreach ($imagesToDelete as $imageName) {
+                Storage::delete('public/company/gallery/' . $imageName);
+                // Remove from current gallery array
+                $currentGallery = array_diff($currentGallery, [$imageName]);
+            }
+        }
+
+        // 2. Add new images
+        if ($request->hasFile('company_gallery')) {
+            foreach ($request->file('company_gallery') as $galleryFile) {
+                $filename = time() . '_' . Str::slug($galleryFile->getClientOriginalName()) . '.' . $galleryFile->getClientOriginalExtension();
+                $galleryFile->storeAs('public/company/gallery', $filename);
+                $currentGallery[] = $filename;
+            }
+        }
+        $company->update([
+            'company_name' => $request->company_name,
+            'company_field' => $request->company_field,
+            'company_description' => $request->company_description,
+            'company_phone' => $request->company_phone,
+            'company_address' => $request->company_address,
+            'company_picture' => $request->company_picture ?? 'https://picsum.photos/id/870/200/300?grayscale&blur=2',
+            'company_gallery' => array_values($currentGallery), // Re-index the array
+            'creator' => Auth::user()->id_users
+        ]);
 
         return response()->json([
             "message" => "Succesfully Updated The Company!",
@@ -230,6 +280,18 @@ class CompanyController extends Controller
     {
         $company = Company::findOrFail($id);
 
+        // Delete the main picture
+        if ($company->company_picture && $company->company_picture !== 'default_company.png') {
+            Storage::delete('public/company/' . $company->company_picture);
+        }
+
+        // Delete all gallery images
+        if (!empty($company->company_gallery)) {
+            foreach ($company->company_gallery as $galleryImage) {
+                Storage::delete('public/company/gallery/' . $galleryImage);
+            }
+        }
+
         $company->delete();
 
         return response()->json([
@@ -237,14 +299,14 @@ class CompanyController extends Controller
         ], 200);
     }
 
-    public function detailApproval(String $id)
+    public function detailApproval(string $id)
     {
         $company = Company::findOrFail($id);
-        return view('content.admin-detail-company',compact('company'));
+        return view('content.admin-detail-company', compact('company'));
     }
 
     // Method to approve a company
-    public function approveCompany(String $id) // Using route model binding
+    public function approveCompany(string $id) // Using route model binding
     {
         $company = Company::findOrFail($id);
         if ($company->status === 'pending') {
@@ -262,13 +324,13 @@ class CompanyController extends Controller
                 'message' => 'Company Anda berhasil diverifikasi. Data telah ditambahkan!.',
             ]);
 
-            return redirect()->route('admin.home')->with('success', "Company '{$company->company_name}' approved.");
+            return redirect()->route('admin.home')->with('approved', "Company '{$company->company_name}' approved.");
         }
-        return redirect()->route('admin.home')->with('error', "Company '{$company->company_name}' is not pending approval.");
+        return redirect()->route('admin.home')->with('rejected', "Company '{$company->company_name}' is not pending approval.");
     }
 
     // Method to reject a company
-    public function rejectCompany(Request $request, String $id) // Using route model binding
+    public function rejectCompany(Request $request, string $id) // Using route model binding
     {
         $request->validate(['rejection_reason' => 'nullable|string|min:5|max:500']);
 
@@ -278,6 +340,17 @@ class CompanyController extends Controller
             $company->status = 'rejected';
             $company->rejection_reason = $request->rejection_reason ?? '"Company Data Not Credibles"';
 
+            // Delete the main picture
+            if ($company->company_picture && $company->company_picture !== 'default_company.png') {
+                Storage::delete('public/company/' . $company->company_picture);
+            }
+
+            // Delete all gallery images
+            if (!empty($company->company_gallery)) {
+                foreach ($company->company_gallery as $galleryImage) {
+                    Storage::delete('public/company/gallery/' . $galleryImage);
+                }
+            }
 
             Notification::create([
                 'id_users' => $company->creator,
@@ -285,10 +358,14 @@ class CompanyController extends Controller
                 'message' => "Data Anda Tidak Berhasil diverifikasi, Alasan: $company->rejection_reason.",
             ]);
 
+            foreach ($company->jobs as $job) {
+                $job->jobTracking()->delete();
+            }
+            $company->jobs()->delete();
             $company->delete();
-            return redirect()->route('admin.home')->with('success', "Company '{$company->company_name}' rejected.");
+            return redirect()->route('admin.home')->with('rejected', "Company '{$company->company_name}' rejected.");
         }
-        return redirect()->route('admin.home')->with('error', "Company '{$company->company_name}' is not pending approval.");
+        return redirect()->route('admin.home')->with('rejected', "Company '{$company->company_name}' is not pending approval.");
     }
 
 }

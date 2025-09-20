@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
 use App\Models\Job;
 use App\Models\News;
 use App\Models\User;
 use App\Models\Company;
 use App\Models\JobTracking;
 use App\Models\UserDetails;
+use Illuminate\Support\Str;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use App\Models\PendingRequest;
 use App\Services\AdminService;
+use PHPUnit\Event\Code\Throwable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -39,28 +42,21 @@ class AdminController extends Controller
 
     public function login(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
         ]);
 
-        if ($validator->fails()) {
-            return redirect()->back()->withErrors(['error' => 'Invalid Input']);
-        }
-
         // Cek apakah user ada di database
         $user = User::where('email', $request->email)->first();
 
-        // Debugging Purpose :
-        // if (!$user) {
-        //     dd('No user found');
-        // }
-        // if (!Hash::check($request->password, $user->password)) {
-        //     dd('Password does not match');
-        // }
-        // if ($user->id_roles !== 1) {
-        //     dd('Not an admin');
-        // }
+        // Validasi Password
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return redirect()->back()->withErrors([
+                'email' => 'Invalid email input or password.',
+            ])->withInput();
+        }
+
 
         // NEW: Create token instead of just using Auth::login()
         $token = $user->createToken('web-session')->plainTextToken;
@@ -74,7 +70,7 @@ class AdminController extends Controller
             null,
             true, // secure
             false  // httpOnly
-         );
+        );
 
         // Generate API token
         Auth::login($user);
@@ -167,10 +163,9 @@ class AdminController extends Controller
     public function editAlumni(Request $request, string $id)
     {
         $request->validate([
-            'full_name' => 'required|string|max:255',
-            'current_company' => 'required|string|max:255',
-            'current_job' => 'required|string|max:255',
-            'user_description' => 'required|string|max:1000',
+            'current_company' => 'nullable|string|max:255',
+            'current_job' => 'nullable|string|max:255',
+            'user_description' => 'nullable|string|max:1000',
             'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096', // Validates the file
         ]);
 
@@ -178,25 +173,19 @@ class AdminController extends Controller
 
         // Handle file upload
         if ($request->hasFile('profile_picture')) {
-
             // Delete the old file if it exists
             if ($user->profile_photo && Storage::exists('public/profile/' . $user->profile_photo)) {
                 Storage::delete('public/profile/' . $user->profile_photo);
             }
-
             $file = $request->file('profile_picture');
             $filenameWithExt = $file->getClientOriginalName();
-
             $filename = pathinfo($filenameWithExt, PATHINFO_FILENAME);
             $extension = $request->file('profile_picture')->getClientOriginalExtension();
-
             $filenameSimpan = $filename . '_' . time() . '.' . $extension;
             $file->storeAs('public/profile', $filenameSimpan);
-
             $user->profile_photo = $filenameSimpan ?? null;
         }
 
-        $user->name = $request->full_name;
         $user->current_company = $request->current_company;
         $user->current_job = $request->current_job;
         $user->user_description = $request->user_description;
@@ -205,7 +194,7 @@ class AdminController extends Controller
         // Clear the alumni cache after updating an alumni
         $this->adminService->clearCaches('alumni', $id);
 
-        return redirect()->back();
+        return redirect()->back()->with('approved','Succesfully Updated Alumni Profile Data!');
     }
 
     public function editExperiencesAlumni(string $id)
@@ -248,11 +237,14 @@ class AdminController extends Controller
             'company' => 'required|exists:company,id_company',
             'position' => 'required|string|max:255',
             'date_start' => 'required|date',
-            'date_end' => 'date|nullable',
-
+            'date_end' => 'nullable',
             'job_responsibility' => 'array|min:1',
             'job_responsibility.*' => 'string|max:1000',
         ]);
+
+        // Handle "Present" value for current position - store as null in the database
+        $dateEnd = ($request->date_end === 'Present') ? null : $request->date_end;
+
 
         $job = Job::create([
             'job_name' => $request->position,
@@ -263,11 +255,13 @@ class AdminController extends Controller
             'id_userDetails' => $id,
             'id_jobs' => $job->id_jobs,
             'date_start' => $request->date_start,
-            'date_end' => $request->date_end,
+            'date_end' => $dateEnd,
             'job_description' => $request->job_responsibility,
         ]);
 
-        return redirect()->back();
+        return redirect()->route('admin.alumni')->with('approved','Succesfully Created Alumni Experiences');
+
+
     }
 
     public function updateAlumniExperiences(Request $request, string $id)
@@ -277,47 +271,66 @@ class AdminController extends Controller
             'company' => 'required|exists:company,id_company',
             'position' => 'required|string|max:255',
             'date_start' => 'required|date',
-            'date_end' => 'date|nullable',
+            'date_end' => 'nullable',
             'job_responsibility' => 'array|min:1',
             'job_responsibility.*' => 'string|max:1000'
         ]);
 
-        // Find the existing JobTracking record
-        $jobTracking = JobTracking::findOrFail($id); // Find by ID, or return 404 if not found
+        // Handle "Present" value for current position - store as null in the database
+        $dateEnd = ($request->date_end === 'Present') ? null : $request->date_end;
 
+        $jobTracking = JobTracking::findOrFail($id);
         // Update the related Job record
         $job_id = $jobTracking->id_jobs; // get job id
 
         // initialize job
         $job = Job::findOrFail($job_id);
 
-        $job->job_name = $request->position;
-        $job->id_company = $request->company;
-        $job->save(); // Save the updated Job record
-
-        // Update the JobTracking record
-        $jobTracking->date_start = $request->date_start;
-        $jobTracking->date_end = $request->date_end ?: null; // Set to null if not provided
-        $jobTracking->job_description = $request->job_responsibility; // Assuming this is a JSON field or array
-        $jobTracking->save(); // Save the updated JobTracking record
-
-
-        // Redirect with success message
-        return redirect()->back()
-            ->with('success', 'Berhasil memperbarui pengalaman kerja.');
+        $job->update([
+            'job_name' => $request->position,
+            'id_company' => $request->company
+        ]);
+        $jobTracking->update([
+            'date_start' => $request->date_start,
+            'date_end' => $dateEnd,
+            // FIX: Use json_encode() because you are SAVING an array to the database.
+            'job_description' => $request->job_responsibility,
+        ]);
+        return redirect()->route('admin.alumni')->with('approved', 'Succesfully Updated Alumni Experiences');
     }
 
     public function getChartData()
     {
         $queryData = DB::table('user_details')
-            ->selectRaw('entry_year AS x, COUNT(*) AS y')
-            ->whereNotNull('entry_year')
-            ->groupBy('entry_year')
-            ->orderBy('entry_year')
+            ->join('users', 'user_details.id_users', '=', 'users.id_users')
+            ->selectRaw('user_details.entry_year AS x, COUNT(*) AS y')
+            ->whereNotNull('user_details.entry_year')
+            ->where('users.id_roles', 2) // Filter hanya role ID 2
+            ->groupBy('user_details.entry_year')
+            ->orderBy('user_details.entry_year')
             ->get();
 
-        return response()->json($queryData); // Return data as JSON for frontend
+        return response()->json($queryData);
     }
+
+    public function getChartUserData()
+    {
+        $queryData = DB::table('users')
+            ->selectRaw("DATE_FORMAT(updated_at, \"%b'%y\") AS x, COUNT(*) AS y, DATE_FORMAT(updated_at, '%Y-%m') AS sort_order")
+            ->whereNotNull('updated_at')
+            ->groupByRaw("x, sort_order")
+            ->orderByRaw("sort_order")
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'x' => $item->x,
+                    'y' => $item->y
+                ];
+            });
+
+        return response()->json($queryData);
+    }
+
 
     public function handleApproval(Request $request, string $id)
     {
@@ -341,7 +354,8 @@ class AdminController extends Controller
                 Notification::create([
                     'id_users' => $pendingRequest->userDetails->user->id_users,
                     'type' => 'approved',
-                    'message' => 'Data Anda berhasil diverifikasi. Perubahan telah diterapkan.',
+                    'message' => 'Verification complete! Your information has been
+                                    successfully updated.',
                 ]);
             } elseif ($pendingRequest->request_type === 'update') {
                 // Update the existing JobTracking record
@@ -367,13 +381,13 @@ class AdminController extends Controller
                 Notification::create([
                     'id_users' => $pendingRequest->userDetails->user->id_users,
                     'type' => 'approved',
-                    'message' => 'Data Anda berhasil diverifikasi. Perubahan telah diterapkan.',
+                    'message' => 'Verification complete! Your information has been successfully updated.',
                 ]);
             }
             // Clear the cache so updated data is fetched fresh
             Cache::forget('pending_requests');
             $pendingRequest->update(['approval_status' => 'approved']);
-            return redirect()->route('admin.home')->with('approved', 'Permintaaan pengubahan data disetujui.');
+            return redirect()->route('admin.home')->with('approved', 'Data update request has been approved.');
         }
 
         if ($request->action === 'reject') {
@@ -382,11 +396,11 @@ class AdminController extends Controller
             Notification::create([
                 'id_users' => $pendingRequest->userDetails->user->id_users,
                 'type' => 'rejected',
-                'message' => 'Verifikasi data tidak berhasil. Mohon periksa kembali informasi yang Anda berikan atau coba lagi nanti.',
+                'message' => 'Verification failed. Please check your data and try again.',
             ]);
             // Clear the cache so updated data is fetched fresh
             Cache::forget('pending_requests');
-            return redirect()->route('admin.home')->with('rejected', 'Permintaan pengubahan data ditolak.');
+            return redirect()->route('admin.home')->with('rejected', 'Data update request has been rejected.');
         }
     }
 
@@ -400,7 +414,7 @@ class AdminController extends Controller
 
     public function getCompany()
     {
-        $companies = $this->adminService->getAllCompanies();
+        $companies = Company::get();
         return view('content.admin-company', compact('companies'));
     }
 
@@ -412,34 +426,52 @@ class AdminController extends Controller
 
     public function storeCompany(Request $request)
     {
-        $validated = $request->validate([
-            'company_name' => 'required|string|max:255',
-            'company_field' => 'required|string|max:255',
-            'company_description' => 'required|string|max:255',
-            'company_address' => 'string|max:255',
-            'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
-        ]);
+        try{
+            $request->validate([
+                'company_name' => 'required|string|max:255',
+                'company_field' => 'required|string|max:255',
+                'company_description' => 'required|string|max:255',
+                'company_address' => 'string|max:255',
+                'company_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+                'company_gallery' => 'nullable|array|max:5',
+                'company_gallery.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:4096',
+            ]);
 
-        $company = Company::create([
-            'company_name' => $request->company_name,
-            'company_field' => $request->company_field,
-            'company_description' => $request->company_description,
-            'company_address' => $request->company_address,
-            'company_picture' => $request->company_picture,
-        ]);
 
-        if ($request->hasFile('company_picture')) {
-            $file = $request->file('company_picture');
-            $filenameWithExt = $file->getClientOriginalName();
-            $filename = pathinfo($filenameWithExt, PATHINFO_FILENAME);
-            $extension = $request->file('company_picture')->getClientOriginalExtension();
-            $filenameSimpan = $filename . '_' . time() . '.' . $extension;
-            $file->storeAs('public/company', $filenameSimpan);
-            $company->company_picture = $filenameSimpan;
-            $company->save();
+            if ($request->hasFile('company_picture')) {
+                $file = $request->file('company_picture');
+                $filenameWithExt = $file->getClientOriginalName();
+                $filename = pathinfo($filenameWithExt, PATHINFO_FILENAME);
+                $extension = $request->file('company_picture')->getClientOriginalExtension();
+                $filenameSimpan = $filename . '_' . time() . '.' . $extension;
+                $file->storeAs('public/company', $filenameSimpan);
+                $companyPicture = $filenameSimpan;
+            }
+
+            // Upload company_gallery (if any)
+            $galleryPaths = [];
+            if ($request->hasFile('company_gallery')) {
+                foreach ($request->file('company_gallery') as $galleryFile) {
+                    $filename = time() . '_' . Str::slug($galleryFile->getClientOriginalName()) . '.' . $galleryFile->getClientOriginalExtension();
+                    $galleryFile->storeAs('public/company/gallery', $filename);
+                    $galleryPaths[] = $filename;
+                }
+            }
+            $company = Company::create([
+                'company_name' => $request->company_name,
+                'company_field' => $request->company_field,
+                'company_description' => $request->company_description,
+                'company_address' => $request->company_address,
+                'company_picture' => $filenameSimpan,
+                'company_gallery' => $galleryPaths,
+                'creator' => Auth::user()->id_users,
+            ]);
+
+            return redirect()->back()->with('approved', 'Company added successfully!');
+        }catch(Exception $e){
+            return redirect()->back()->with('rejected', 'Failed to add Company!');
         }
 
-        return redirect()->back()->with('success', 'Company created successfully.');
     }
 
     public function updateCompany(Request $request, string $id)
@@ -481,24 +513,112 @@ class AdminController extends Controller
         // Clear cache after update
         $this->adminService->clearCaches('company', $id);
 
-        return redirect()->back();
+        return redirect()->back()->with('approved','Successfully Updated Company Data!');
     }
 
     public function deleteCompany(string $id)
     {
         $company = Company::findOrFail($id);
-        $company->delete();
+        $hasAlumni = Job::where('id_company',$company->id_company)->exists();
 
+        if ($hasAlumni) {
+            return redirect()->back()->with('rejected','Failed to delete company, This company is linked to one or more users.');
+        }
+
+        // Delete the main picture
+        if ($company->company_picture && $company->company_picture !== 'default_company.png') {
+            Storage::delete('public/company/' . $company->company_picture);
+        }
+
+        // Delete all gallery images
+        if (!empty($company->company_gallery)) {
+            foreach ($company->company_gallery as $galleryImage) {
+                Storage::delete('public/company/gallery/' . $galleryImage);
+            }
+        }
+
+        $company->delete();
         // Clear cache after delete
         $this->adminService->clearCaches('company', $id);
         $this->adminService->clearCaches('company');
 
-        return redirect()->back();
+        return redirect()->back()->with('approved', 'Company Succesfully Deleted!');
     }
 
     public function getNews()
     {
-        $news = $this->adminService->getAllNews();
-        return view('content.admin-news', compact('news'));
+        $newss = News::latest()->get(); // atau dari service
+        return view('content.admin-news', compact('newss'));
+    }
+
+    public function storeNews(Request $request)
+    {
+        try {
+            $request->validate([
+                'heading' => 'nullable|string|max:255',
+                'description' => 'nullable|string',
+                'banner_image' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+            ]);
+
+            if (!$request->hasFile('banner_image')) {
+                return back()->withErrors('Gambar tidak terkirim.');
+            }
+
+            $imagePath = $request->file('banner_image')->store('news-images', 'public');
+
+            News::create([
+                'heading' => $request->heading,
+                'description' => $request->description,
+                'banner_image' => $imagePath
+            ]);
+
+            return redirect()->back()->with('approved', 'News has been created.');
+        } catch (\Throwable $th) {
+            return redirect()->back()->withErrors('Failed to create news.');
+        }
+    }
+
+
+    public function updateNews(Request $request, string $id)
+    {
+        try {
+            $request->validate([
+                'heading' => 'nullable|string|max:255',
+                'description' => 'nullable|string',
+                'banner_image' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+            ]);
+
+            $news = News::findOrFail($id);
+
+            $data = [
+                'heading' => $request->heading,
+                'description' => $request->description,
+            ];
+
+            if ($request->hasFile('banner_image')) {
+                $imagePath = $request->file('banner_image')->store('news-images', 'public');
+                $data['banner_image'] = $imagePath;
+            }
+
+            $news->update($data);
+
+            return redirect()->back()->with('approved', 'News has been updated.');
+        } catch (\Throwable $th) {
+            return redirect()->back()->withErrors('Failed to update news.');
+        }
+    }
+
+
+    public function deleteNews(string $id)
+    {
+        $news = News::findOrFail($id);
+
+        if ($news->banner_image && Storage::disk('public')->exists($news->banner_image)) {
+            Storage::disk('public')->delete($news->banner_image);
+        }
+
+        $news->delete();
+
+        return redirect()->back()->with('approved', 'News has been deleted.');
     }
 }

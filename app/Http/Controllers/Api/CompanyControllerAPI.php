@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Resources\CompanyResource;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache; //
+
 
 class CompanyControllerAPI extends Controller
 {
@@ -77,15 +79,15 @@ class CompanyControllerAPI extends Controller
             "message" => "Succesfuly Fetched Company Data!",
             "company" => $company,
             "workers" => $workers,
-        ],200);
+        ], 200);
     }
 
     public function update(Request $request, string $id)
     {
         $company = Company::findOrFail($id);
 
-        if (Auth::id() !== $company->creator && !(Auth::check() && Auth::user()->id_roles == 1) ) {
-             return response()->json(['message' => 'Forbidden. You do not have permission to update this company.'], 403);
+        if (Auth::id() !== $company->creator && !(Auth::check() && Auth::user()->id_roles == 1)) {
+            return response()->json(['message' => 'Forbidden. You do not have permission to update this company.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -114,7 +116,7 @@ class CompanyControllerAPI extends Controller
             $data['status'] = $company->status;
         } elseif (Auth::id() === $company->creator && $company->status === 'approved') {
             // Jika creator mengedit perusahaan yang sudah approved, kembalikan statusnya ke pending
-             $data['status'] = 'pending';
+            $data['status'] = 'pending';
         }
 
 
@@ -139,7 +141,7 @@ class CompanyControllerAPI extends Controller
 
         // Kebijakan: Hanya pembuat atau admin yang bisa menghapus
         if (Auth::id() !== $company->creator && !(Auth::check() && Auth::user()->id_roles == 1)) {
-             return response()->json(['message' => 'Forbidden. You do not have permission to delete this company.'], 403);
+            return response()->json(['message' => 'Forbidden. You do not have permission to delete this company.'], 403);
         }
 
         // Hapus gambar dari storage jika ada dan bukan default
@@ -151,23 +153,32 @@ class CompanyControllerAPI extends Controller
 
         return response()->json(['message' => 'Company successfully deleted.'], 200);
     }
-    public function getTopCompany(){
+    public function getTopCompany()
+    {
 
-        // Get top companies
-        $companies = DB::table('company')
-            ->join('jobs', 'company.id_company', '=', 'jobs.id_company')
-            ->join('job_tracking', 'jobs.id_jobs', '=', 'job_tracking.id_jobs')
-            ->join('user_details', 'job_tracking.id_userDetails', '=', 'user_details.id_userDetails')
-            ->select(
-                'company.id_company',
-                'company.company_name',
-                DB::raw("COALESCE(company.company_picture, 'https://picsum.photos/id/870/200/300?grayscale&blur=2') as company_picture"),
-                DB::raw('count(distinct user_details.id_userDetails) as employee_count')
-            )
-            ->groupBy('company.id_company', 'company.company_name', 'company.company_picture')
-            ->orderBy('employee_count', 'desc')
-            ->paginate(5);
+        // Define how long to keep the cache in seconds (e.g., 3600 seconds = 1 hour)
+        $cacheDuration = 3600;
 
+        // Define a unique key for this cache entry
+        $cacheKey = 'home_page_top_companies';
+
+        $companies = Cache::remember($cacheKey, $cacheDuration, function () {
+
+            return DB::table('company')
+                ->join('jobs', 'company.id_company', '=', 'jobs.id_company')
+                ->join('job_tracking', 'jobs.id_jobs', '=', 'job_tracking.id_jobs')
+                ->join('user_details', 'job_tracking.id_userDetails', '=', 'user_details.id_userDetails')
+                ->select(
+                    'company.id_company',
+                    'company.company_name',
+                    DB::raw("COALESCE(company.company_picture, 'https://picsum.photos/id/870/200/300?grayscale&blur=2') as company_picture"),
+                    DB::raw('count(distinct user_details.id_userDetails) as employee_count')
+                )
+                ->groupBy('company.id_company', 'company.company_name', 'company.company_picture')
+                ->orderBy('employee_count', 'desc')
+                ->paginate(5);
+
+        });
         return response()->json([
             'message' => 'Successfully fetched posts and companies',
             'data' => $companies

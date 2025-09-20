@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('news', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->string('heading');
-            $table->string('description');
-            $table->string('cover_page');
+            $table->string('heading')->nullable();
+            $table->string('description')->nullable();
+            $table->string('banner_image');
             $table->timestamps();
         });
     }

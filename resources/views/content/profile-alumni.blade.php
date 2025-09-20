@@ -84,8 +84,7 @@
                                 class="fixed left-0 right-0 top-0 z-50 hidden h-[calc(100%-1rem)] max-h-full w-full items-center justify-center overflow-y-auto overflow-x-hidden md:inset-0">
                                 <div class="relative mx-4 max-h-full w-full sm:max-w-4xl">
                                     <!-- Modal content -->
-                                    <div
-                                        class="relative overflow-y-auto rounded-lg bg-white pb-5 shadow">
+                                    <div class="relative overflow-y-auto rounded-lg bg-white pb-5 shadow">
                                         <!-- Modal header -->
                                         <div
                                             class="flex items-center justify-between rounded-t border-b-4 border-cyan-100 p-2 text-center md:p-5">
@@ -112,7 +111,7 @@
                                                 <div
                                                     class="h-full w-full overflow-hidden rounded-full border-4 border-cyan bg-gray-100">
                                                     <img id="preview-image" class="h-full w-full object-cover"
-                                                        src="{{ asset('storage/profile/' . $userDetails->profile_photo) }}"
+                                                        src="{{ $userDetails->profile_photo ? asset('storage/profile/' . $userDetails->profile_photo) : asset('assets/placeholder.png') }}"
                                                         alt="{{ $userDetails->name }}'s Profile Picture">
                                                 </div>
                                                 <label for="profile_picture"
@@ -137,7 +136,8 @@
                                                 onchange="document.getElementById('preview-image').src = window.URL.createObjectURL(this.files[0])">
                                             <div>
                                                 <label for="full_name" class="mb-1 block text-2xl text-cyan">Full
-                                                    Name</label>
+                                                    Name <span
+                                                        class="relative top-1 -ms-2 align-baseline text-4xl leading-none text-red-500">*</span></label>
                                                 <input type="text" id="full_name" name="full_name"
                                                     class="w-full rounded-full border border-gray-300 bg-gray-200 py-2 pe-3 ps-4 shadow-sm focus:border-cyan focus:outline-none focus:ring-cyan"
                                                     required value="{{ $userDetails->name }}"
@@ -152,6 +152,7 @@
                                                         {{ $userDetails->current_company ? '' : 'selected' }}>
                                                         Select a company name
                                                     </option>
+                                                    <option value="">No Company</option>
                                                     @foreach ($companies as $company)
                                                         <option value="{{ $company->company_name }}"
                                                             {{ $company->company_name == $userDetails->current_company ? 'selected' : '' }}>
@@ -161,16 +162,31 @@
                                                 </select>
                                             </div>
                                             <div>
-                                                <label for="current_job" class="mb-1 block text-2xl text-cyan">Current
-                                                    Position</label>
-                                                <input type="text" id="current_job" name="current_job"
+                                                <label for="current_job" class="mb-1 block text-2xl text-cyan">
+                                                    Current Position
+                                                </label>
+                                                <select id="current_job" name="current_job"
                                                     class="w-full rounded-full border border-gray-300 bg-gray-200 py-2 pe-3 ps-4 shadow-sm focus:border-cyan focus:outline-none focus:ring-cyan"
-                                                    required value="{{ $userDetails->current_job }}"
-                                                    placeholder="Select a job position" />
+                                                    >
+                                                    <option value="" disabled
+                                                        {{ old('current_job', $userDetails->current_job) ? '' : 'selected' }}>
+                                                        Select a job position
+                                                    </option>
+                                                    <option value=""
+                                                        {{ old('current_job', $userDetails->current_job) == '' ? 'selected' : '' }}>
+                                                        Jobless
+                                                    </option>
+                                                    @foreach ($allJob as $job)
+                                                        <option value="{{ $job->job_name }}"
+                                                            {{ old('current_job', $userDetails->current_job) == $job->job_name ? 'selected' : '' }}>
+                                                            {{ $job->job_name }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
                                             </div>
                                             <div>
-                                                <label for="user_description"
-                                                    class="mb-1 block text-2xl text-cyan">About</label>
+                                                <label for="user_description" class="mb-1 block text-2xl text-cyan">About
+                                                </label>
                                                 <textarea type="text" id="user_description" name="user_description"
                                                     class="w-full rounded-md border border-gray-300 bg-gray-200 px-3 py-2 shadow-sm focus:border-cyan focus:outline-none focus:ring-cyan"
                                                     placeholder="Tell us about yourself and your professional journey...">{{ $userDetails->user_description }}</textarea>

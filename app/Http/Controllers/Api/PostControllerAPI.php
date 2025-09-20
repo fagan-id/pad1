@@ -18,7 +18,7 @@ class PostControllerAPI extends Controller
     public function index(Request $request)
     {
         try {
-            // 1. Tambahkan pengecekan autentikasi untuk filter khusus
+            // My Post and MyCommented Post
             $filter = $request->input('filter');
             if (($filter == 'my_posts' || $filter == 'my_commented_posts') && !Auth::check()) {
                 return response()->json([
@@ -26,6 +26,9 @@ class PostControllerAPI extends Controller
                     "message" => "Unauthorized. You need to be logged in to use this filter.",
                 ], 401);
             }
+            // Date
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
 
             // Memulai query builder
             $vacancysQuery = DB::table('vacancy')
@@ -35,37 +38,45 @@ class PostControllerAPI extends Controller
                 ->select(
                     'vacancy.*',
                     'user_details.name', // Lebih baik sebutkan kolom spesifik untuk menghindari tumpang tindih
-                    'user_details.profile_photo',
                     'company.company_name',
                     DB::raw("COALESCE(user_details.profile_photo, 'default_profile.png') as profile_photo"),
                 );
 
+            // Apply Filter
             if ($filter == 'my_posts') {
                 $vacancysQuery->where('vacancy.id_users', Auth::id());
-
             } elseif ($filter == 'my_commented_posts') {
                 $vacancysQuery->whereIn('vacancy.id_vacancy', function ($query) {
                     $query->select('id_vacancy')
-                          ->from('comments') // 2. Koreksi nama tabel menjadi 'comments'
-                          ->where('id_users', Auth::id());
+                        ->from('comment')
+                        ->where('id_users', Auth::id());
+                });
+            }
+
+            // In your controller, ensure date validation
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $request->validate([
+                    'start_date' => 'required|date',
+                    'end_date' => 'required|date|after_or_equal:start_date'
+                ]);
+
+                $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
+                $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+
+                $vacancysQuery->whereBetween('vacancy.created_at', [$startDate, $endDate]);
+            }
+            // Apply Search Query
+            if ($request->filled('query')) {
+                $query = $request->input('query');
+                $vacancysQuery->where(function ($q) use ($query) {
+                    $q->where('vacancy.position', 'LIKE', "%$query%")
+                    ->orWhere('company.company_name', 'LIKE', "%$query%")
+                    ->orWhere('user_details.name', 'LIKE', "%$query%");
                 });
             }
 
             $vacancys = $vacancysQuery->orderBy('id_vacancy', 'desc')->paginate(10);
-
-            // Membuat Variabel Tanggal Menjadi Lebih Dinamis dengan Tanggal Saat ini
-            foreach ($vacancys as $vc) {
-
-                $dateOpen = Carbon::parse($vc->date_open);
-                $now = Carbon::now();
-                $daysDifference = $dateOpen->diffInDays($now);
-
-                if ($daysDifference < 1) {
-                    $vc->date_difference = 'Today';
-                } else {
-                    $vc->date_difference = $daysDifference . ' days ago';
-                }
-            }
+            $vacancys->appends($request->all());
 
             return response()->json([
                 "success" => true,
@@ -149,8 +160,8 @@ class PostControllerAPI extends Controller
                 'company',          // Memuat data perusahaan
                 'comments' => function ($query) { // Memuat komentar
                     $query->whereNull('parent_id') // Hanya komentar utama (bukan balasan)
-                          ->with('user.userDetails') // Beserta data pembuat komentar
-                          ->orderBy('created_at', 'desc');
+                        ->with('user.userDetails') // Beserta data pembuat komentar
+                        ->orderBy('created_at', 'desc');
                 },
                 'registrations.user' // Memuat data pendaftar
             ])->find($id); // Mencari vacancy berdasarkan ID
@@ -182,77 +193,77 @@ class PostControllerAPI extends Controller
     /**
      * Update the specified resource in storage.
      */
-        public function update(Request $request, string $post)
-        {
-            try {
-                $vacancy = Vacancy::find($post);
-                if (!$vacancy) {
-                    return response()->json([
-                        "success" => false,
-                        "message" => "Vacancy not found"
-                    ], 404);
-                }
-
-                // Simple field-by-field update
-                if ($request->filled('position')) {
-                    $vacancy->position = $request->position;
-                }
-
-                if ($request->filled('vacancy_description')) {
-                    $vacancy->vacancy_description = $request->vacancy_description;
-                }
-
-                if ($request->has('vacancy_responsibility')) {
-                    $vacancy->vacancy_responsibilities = $request->vacancy_responsibility;
-                }
-
-                if ($request->has('vacancy_qualification')) {
-                    $vacancy->vacancy_qualification = $request->vacancy_qualification;
-                }
-
-                if ($request->has('vacancy_benefits')) {
-                    $vacancy->vacancy_benefits = $request->vacancy_benefits;
-                }
-
-                if ($request->filled('start_date')) {
-                    $vacancy->date_open = $request->start_date;
-                }
-
-                if ($request->filled('end_date')) {
-                    $vacancy->date_closed = $request->end_date;
-                }
-
-                // Handle file upload
-                if ($request->hasFile('vacancy_picture')) {
-                    // Delete old picture
-                    if ($vacancy->vacancy_picture) {
-                        $oldPath = str_replace('/storage/', '', $vacancy->vacancy_picture);
-                        if (Storage::disk('public')->exists($oldPath)) {
-                            Storage::disk('public')->delete($oldPath);
-                        }
-                    }
-
-                    // Store new picture
-                    $path = $request->file('vacancy_picture')->store('vacancies', 'public');
-                    $vacancy->vacancy_picture = '/storage/' . $path;
-                }
-
-                $vacancy->save();
-
-                return response()->json([
-                    "success" => true,
-                    "message" => "Vacancy updated successfully",
-                    "data" => $vacancy
-                ], 200);
-
-            } catch (\Throwable $th) {
+    public function update(Request $request, string $post)
+    {
+        try {
+            $vacancy = Vacancy::find($post);
+            if (!$vacancy) {
                 return response()->json([
                     "success" => false,
-                    "message" => "Failed to update vacancy",
-                    "error" => $th->getMessage()
-                ], 500);
+                    "message" => "Vacancy not found"
+                ], 404);
             }
+
+            // Simple field-by-field update
+            if ($request->filled('position')) {
+                $vacancy->position = $request->position;
+            }
+
+            if ($request->filled('vacancy_description')) {
+                $vacancy->vacancy_description = $request->vacancy_description;
+            }
+
+            if ($request->has('vacancy_responsibility')) {
+                $vacancy->vacancy_responsibilities = $request->vacancy_responsibility;
+            }
+
+            if ($request->has('vacancy_qualification')) {
+                $vacancy->vacancy_qualification = $request->vacancy_qualification;
+            }
+
+            if ($request->has('vacancy_benefits')) {
+                $vacancy->vacancy_benefits = $request->vacancy_benefits;
+            }
+
+            if ($request->filled('start_date')) {
+                $vacancy->date_open = $request->start_date;
+            }
+
+            if ($request->filled('end_date')) {
+                $vacancy->date_closed = $request->end_date;
+            }
+
+            // Handle file upload
+            if ($request->hasFile('vacancy_picture')) {
+                // Delete old picture
+                if ($vacancy->vacancy_picture) {
+                    $oldPath = str_replace('/storage/', '', $vacancy->vacancy_picture);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+
+                // Store new picture
+                $path = $request->file('vacancy_picture')->store('vacancies', 'public');
+                $vacancy->vacancy_picture = '/storage/' . $path;
+            }
+
+            $vacancy->save();
+
+            return response()->json([
+                "success" => true,
+                "message" => "Vacancy updated successfully",
+                "data" => $vacancy
+            ], 200);
+
+        } catch (\Throwable $th) {
+            return response()->json([
+                "success" => false,
+                "message" => "Failed to update vacancy",
+                "error" => $th->getMessage()
+            ], 500);
         }
+    }
 
     /**
      * Remove the specified resource from storage.

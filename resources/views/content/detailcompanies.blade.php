@@ -44,16 +44,30 @@
                                 <div class="splide__slider">
                                     <div class="splide__track">
                                         <ul class="splide__list">
-                                            <li class="splide__slide"><img src=" {{ asset('assets/company-2.png') }} "
-                                                    alt=""></li>
-                                            <li class="splide__slide"><img src=" {{ asset('assets/company-3.png') }} "
-                                                    alt=""></li>
-                                            <li class="splide__slide"><img src=" {{ asset('assets/company-1.png') }} "
-                                                    alt=""></li>
+                                            @if ($company->company_gallery && is_array($company->company_gallery))
+                                                @foreach ($company->company_gallery as $photo)
+                                                    <li class="splide__slide">
+                                                        <img src="{{ asset('storage/company/gallery/' . $photo) }}"
+                                                             alt="Company Photo"
+                                                             class="w-full h-48 object-cover rounded-lg shadow">
+                                                    </li>
+                                                @endforeach
+                                            @else
+                                                <li class="splide__slide">
+                                                    <img src="{{ asset('assets/company-1.png') }}" alt="No photo">
+                                                </li>
+                                                <li class="splide__slide">
+                                                    <img src="{{ asset('assets/company-2.png') }}" alt="No photo">
+                                                </li>
+                                                <li class="splide__slide">
+                                                    <img src="{{ asset('assets/company-3.png') }}" alt="No photo">
+                                                </li>
+                                            @endif
                                         </ul>
                                     </div>
                                 </div>
                             </div>
+
 
                             <div id="workers-container">
 
@@ -73,7 +87,7 @@
                                             {{-- Graduate Year --}}
                                             <div class="mb-5 flex w-full justify-end px-6 text-gray-300">
                                                 <span class="text-sm">
-                                                    {{ $worker->graduate_year ?? 'N/A' }}
+                                                    {{ $worker->graduate_year ?? 'Graduated' }}
                                                 </span>
                                             </div>
 
@@ -104,6 +118,9 @@
                                     </div>
                                 @endforelse
                             </div>
+                            <div class="mt-8">
+                                {{ $workers->links() }}
+                            </div>
 
                             {{-- Script for Handling Back Button --}}
                             <script>
@@ -132,17 +149,32 @@
         document.addEventListener('DOMContentLoaded', function() {
             const companyId = window.location.pathname.split('/').pop();
 
-            axios.get(`http://127.0.0.1:8000/api/companies/${companyId}`, {
+            axios.get(`/api/companies/${companyId}`, {
                     withCredentials: true
                 })
                 .then(companyResponse => {
-                    const company = companyResponse.data.data; // tambahkan `.data` karena pakai resource
+                    const company = companyResponse.data.company;
                     const container = document.getElementById('company-content');
+
+                    // Handle company picture URL
+                    let finalPictureUrl;
+                    const pictureFromApi = company.company_picture;
+
+                    if (!pictureFromApi) {
+                        finalPictureUrl = "{{ asset('assets/company-1.png') }}";
+                    }
+                    else if (pictureFromApi.startsWith('http')) {
+                        // If it is, use it directly.
+                        finalPictureUrl = pictureFromApi;
+                    }
+                    else {
+                        finalPictureUrl = `/storage/company/${pictureFromApi}`;
+                    }
 
                     container.innerHTML = `
                 <div class="flex flex-col lg:flex-row lg:space-x-8">
                     <img class="h-24 w-24 rounded-full object-cover sm:h-28 sm:w-28"
-                        src="${company.company_picture ? '/storage/company/' + company.company_picture : '/images/default_profile.png'}"
+                        src="${finalPictureUrl}"
                         alt="${company.company_name}" />
                     <div class="mt-4">
                         <h2 class="text-xl text-cyan sm:text-2xl">${company.company_name}</h2>

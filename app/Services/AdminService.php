@@ -23,7 +23,7 @@ class AdminService
     {
         return Cache::remember('all_alumni', now()->addMinutes(15), function () {
             // Use eager loading with specific columns to reduce data transfer
-            return User::with(['userDetails:id_userDetails,id_users,name,nim,profile_photo'])
+            return User::with(['userDetails:id_userDetails,id_users,name,nim,profile_photo,entry_year'])
                 ->where('id_roles', 2)
                 ->get()
                 ->map(function ($user) {
@@ -54,22 +54,26 @@ class AdminService
             )
             ->findOrFail($id);
 
-        $jobDetails = JobTracking::with(['job', 'job.company'])
-            ->where('id_userDetails', $userDetails->id_userDetails)
-            ->select('job_tracking.*')
-            ->orderBy('id_tracking', 'desc')
+            $jobDetails = DB::table('job_tracking')
+            ->join('jobs', 'job_tracking.id_jobs', '=', 'jobs.id_jobs')
+            ->leftJoin('company', 'jobs.id_company', '=', 'company.id_company')
+            ->where('job_tracking.id_userDetails', $userDetails->id_userDetails)
+            ->select(
+                'job_tracking.*',
+                'jobs.job_name',
+                'company.*',
+                DB::raw('COALESCE(YEAR(job_tracking.date_end), "Now") as date_end'),
+                DB::raw('COALESCE(YEAR(job_tracking.date_start), "Now") as date_start')
+            )
+            ->orderBy('job_tracking.id_tracking', 'desc')
             ->get()
-            ->map(function ($jobTracking) {
-                $jobTracking->date_end_year = $jobTracking->date_end ? date('Y', strtotime($jobTracking->date_end)) : "Now";
-                $jobTracking->date_start_year = $jobTracking->date_start ? date('Y', strtotime($jobTracking->date_start)) : "Now";
-
-                if (isset($jobTracking->job_description) && is_string($jobTracking->job_description)) {
-                    $jobTracking->job_description = json_decode($jobTracking->job_description, true);
-                }
-
-                return $jobTracking;
+            ->map(function ($job) {
+                // Decode job_description if it's stored as a JSON string
+                $job->job_description = json_decode($job->job_description, true);
+                return $job;
             });
 
+        $allJob = Job::get('job_name');
         $companies = Cache::remember('all_companies', now()->addHours(1), function () {
             return Company::all();
         });
@@ -77,7 +81,8 @@ class AdminService
         return [
             'userDetails' => $userDetails,
             'jobDetails' => $jobDetails,
-            'companies' => $companies
+            'companies' => $companies,
+            'allJob' => $allJob
         ];
     }
 
@@ -89,19 +94,24 @@ class AdminService
      */
     public function getCompanyDetails(string $id)
     {
-        $company = Cache::remember('company_' . $id, now()->addMinutes(30), function () use ($id) {
-            return Company::findOrFail($id);
-        });
+        $company = Company::findOrFail($id);
 
-        $workers = JobTracking::with(['userDetails:id_userDetails,name,profile_photo'])
-            ->join('jobs', 'job_tracking.id_jobs', '=', 'jobs.id_jobs')
-            ->where('jobs.id_company', $id)
+        $workers = DB::table('company')
+            ->join('jobs', 'company.id_company', '=', 'jobs.id_company')
+            ->join('job_tracking', 'jobs.id_jobs', '=', 'job_tracking.id_jobs')
+            ->join('user_details', 'job_tracking.id_userDetails', '=', 'user_details.id_userDetails')
             ->select(
-                'job_tracking.id_userDetails',
-                'job_tracking.date_start',
-                'job_tracking.date_end'
+                'company.id_company',
+                'company.company_name',
+                DB::raw("COALESCE(company.company_picture, 'https://picsum.photos/id/870/200/300?grayscale&blur=2') as company_picture"),
+                'user_details.*', // Include more fields as needed
+                'job_tracking.*',
+                DB::raw('COALESCE(YEAR(job_tracking.date_end), "Now") as date_end'),
+                DB::raw('COALESCE(YEAR(job_tracking.date_start), "Now") as date_start'),
+                DB::raw("COALESCE(user_details.profile_photo, 'default_profile.png') as profile_photo"),
             )
-            ->orderBy('job_tracking.id_userDetails')
+            ->where('company.id_company', '=', $id)
+            ->orderBy('user_details.name', 'asc')
             ->paginate(10);
 
         return [
